@@ -1,0 +1,271 @@
+-- CREATE DATABASE
+CREATE DATABASE BikeStores;
+USE BikeStores;	
+
+-- create schemas
+CREATE SCHEMA production;
+CREATE SCHEMA sales;
+
+-- create tables
+CREATE  TABLE production.categories (
+	category_id INT AUTO_INCREMENT  PRIMARY KEY,
+	category_name VARCHAR (255) NOT NULL
+);
+SELECT count(*) FROM    production.categories  ; -- 7
+
+CREATE TABLE production.brands (
+	brand_id INT AUTO_INCREMENT PRIMARY KEY,
+	brand_name VARCHAR (255) NOT NULL
+);
+SELECT count(*) FROM  production.brands ; -- 9
+
+CREATE TABLE production.products (
+	product_id INT AUTO_INCREMENT PRIMARY KEY,
+	product_name VARCHAR (255) NOT NULL,
+	brand_id INT NOT NULL,
+	category_id INT NOT NULL,
+	model_year SMALLINT NOT NULL,
+	list_price DECIMAL (10, 2) NOT NULL,
+	FOREIGN KEY (category_id) REFERENCES production.categories (category_id) ON DELETE CASCADE ON UPDATE CASCADE,
+	FOREIGN KEY (brand_id) REFERENCES production.brands (brand_id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+SELECT count(*) FROM   production.products  ; -- 321
+SELECT * FROM   production.products ;
+
+CREATE TABLE sales.customers (
+	customer_id INT AUTO_INCREMENT PRIMARY KEY,
+	first_name VARCHAR (255) NOT NULL,
+	last_name VARCHAR (255) NOT NULL,
+	phone VARCHAR (25),
+	email VARCHAR (255) NOT NULL,
+	street VARCHAR (255),
+	city VARCHAR (50),
+	state VARCHAR (25),
+	zip_code VARCHAR (5)
+);
+SELECT count(*) FROM   sales.customers  ; -- 1445
+
+CREATE TABLE sales.stores (
+	store_id INT AUTO_INCREMENT PRIMARY KEY,
+	store_name VARCHAR (255) NOT NULL,
+	phone VARCHAR (25),
+	email VARCHAR (255),
+	street VARCHAR (255),
+	city VARCHAR (255),
+	state VARCHAR (10),
+	zip_code VARCHAR (5)
+);
+SELECT count(*) FROM    sales.stores   ; -- 3
+
+CREATE TABLE sales.staffs (
+	staff_id INT AUTO_INCREMENT PRIMARY KEY,
+	first_name VARCHAR (50) NOT NULL,
+	last_name VARCHAR (50) NOT NULL,
+	email VARCHAR (255) NOT NULL UNIQUE,
+	phone VARCHAR (25),
+	active tinyint NOT NULL,
+	store_id INT NOT NULL,
+	manager_id INT,
+	FOREIGN KEY (store_id) REFERENCES sales.stores (store_id) ON DELETE CASCADE ON UPDATE CASCADE,
+	FOREIGN KEY (manager_id) REFERENCES sales.staffs (staff_id) ON DELETE NO ACTION ON UPDATE NO ACTION
+);
+SELECT count(*) FROM    sales.staffs   ; -- 10
+
+CREATE TABLE sales.orders (
+	order_id INT AUTO_INCREMENT PRIMARY KEY,
+	customer_id INT,
+	order_status tinyint NOT NULL,
+	-- Order status: 1 = Pending; 2 = Processing; 3 = Rejected; 4 = Completed
+	order_date DATE NOT NULL,
+	required_date DATE NOT NULL,
+	shipped_date DATE,
+	store_id INT NOT NULL,
+	staff_id INT NOT NULL,
+	FOREIGN KEY (customer_id) REFERENCES sales.customers (customer_id) ON DELETE CASCADE ON UPDATE CASCADE,
+	FOREIGN KEY (store_id) REFERENCES sales.stores (store_id) ON DELETE CASCADE ON UPDATE CASCADE,
+	FOREIGN KEY (staff_id) REFERENCES sales.staffs (staff_id) ON DELETE NO ACTION ON UPDATE NO ACTION
+);
+SELECT count(*) FROM    sales.orders  ; -- 1615
+
+CREATE TABLE sales.order_items (
+	order_id INT,
+	item_id INT,
+	product_id INT NOT NULL,
+	quantity INT NOT NULL,
+	list_price DECIMAL (10, 2) NOT NULL,
+	discount DECIMAL (4, 2) NOT NULL DEFAULT 0,
+	PRIMARY KEY (order_id, item_id),
+	FOREIGN KEY (order_id) REFERENCES sales.orders (order_id) ON DELETE CASCADE ON UPDATE CASCADE,
+	FOREIGN KEY (product_id) REFERENCES production.products (product_id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+SELECT count(*) FROM   sales.order_items ; -- 4722
+
+CREATE TABLE production.stocks (
+	store_id INT,
+	product_id INT,
+	quantity INT,
+	PRIMARY KEY (store_id, product_id),
+	FOREIGN KEY (store_id) REFERENCES sales.stores (store_id) ON DELETE CASCADE ON UPDATE CASCADE,
+	FOREIGN KEY (product_id) REFERENCES production.products (product_id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+SELECT count(*) FROM   production.stocks; -- 939
+
+-- creation of master table 
+-- use OF left outer join 
+-- focus on necessary columns which you think is important from business side
+-- get all the data 
+
+create table if not exists HF_CUST_SALES_ORDER_MASTER as
+select DISTINCT o.customer_id,c.first_name as customer_fn,c.last_name as customer_ln, 
+oi.order_id, o.order_status, o.order_date, o.shipped_date,
+oi.item_id, oi.product_id,oi.product_name,oi.quantity as order_quantity,
+s.quantity as stock_quantity, oi.list_price
+from sales.order_items as oi
+left outer join sales.orders as o on oi.order_id = o.order_id
+left outer join sales.customers as c on o.customer_id = c.customer_id
+left outer join production.stocks as s on oi.product_id = s.product_id
+left outer join production.products as p on oi.product_id = p.product_id
+left outer join sales.staffs as sta on o.staff_id = sta.staff_id
+left outer join production.brands as b on p.brand_id = b.brand_id
+left outer join production.categories as c on p.category_id = c.category_id
+left outer join sales.stores as sto on o.store_id = sto.store_id;
+
+SELECT * FROM HF_CUST_SALES_ORDER_MASTER;
+drop table HF_CUST_SALES_ORDER_MASTER;
+
+create table HF_CUST_SALES_ORDER_MASTER as
+select DISTINCT ord.customer_id,cus.first_name, cus.last_name, ord.staff_id,
+ord.store_id,str.store_name,
+orit.product_id,prd.product_name, prd.model_year, prd.category_id,
+br.brand_name, prd.brand_id, 
+orit.order_id, ord.order_status, ord.order_date, ord.shipped_date,orit.quantity,orit.list_price
+from sales.order_items orit
+left outer join sales.orders ord on orit.order_id = ord.order_id 
+left outer join sales.customers cus on ord.customer_id = cus.customer_id
+left outer join production.stocks stc on orit.product_id = stc.product_id
+left outer join production.products prd on orit.product_id = prd.product_id
+left outer join sales.staffs stf on ord.staff_id = stf.staff_id
+left outer join production.brands br on prd.brand_id = br.brand_id
+left OUTER join production.categories cat on prd.category_id = cat.category_id
+left outer join sales.stores str on ord.store_id = str.store_id;
+
+SELECT * FROM HF_CUST_SALES_ORDER_MASTER;
+SELECT COUNT(*) FROM HF_CUST_SALES_ORDER_MASTER; -- 4722
+
+
+SELECT DISTINCT year(order_date) FROM HF_CUST_SALES_ORDER_MASTER;
+
+-- TOTAL ORDERS YEAR WISE
+SELECT DISTINCT year(order_date) AS ORDER_YEAR ,COUNT(DISTINCT ORDER_ID) AS TOTAL_ORDERS
+FROM HF_CUST_SALES_ORDER_MASTER
+WHERE ORDER_YEAR = 2016
+GROUP BY 1
+HAVING TOTAL_ORDERS > 500
+ORDER BY 1;
+
+-- BASIC SQL
+-- HOW MANY ORDERS EACH CUSTOMER HAS PLACED?
+SELECT CUSTOMER_ID,COUNT(DISTINCT ORDER_ID) AS TOTAL_ORDERS
+FROM HF_CUST_SALES_ORDER_MASTER
+GROUP BY CUSTOMER_ID
+ORDER BY CUSTOMER_ID;
+
+-- HOW MANY TOTAL ORDERS ARE THERE
+SELECT COUNT(DISTINCT ORDER_ID) AS TOT_ORDERS FROM HF_CUST_SALES_ORDER_MASTER; -- 1615
+
+-- HOW MANY TOTAL CUSTOMERS ARE THERE
+SELECT COUNT(DISTINCT CUSTOMER_ID) AS TOT_CUST FROM HF_CUST_SALES_ORDER_MASTER; -- 1445
+
+-- WHICH IS THE HIGHEST/TOP 3 SELLING  PRODUCT ?
+SELECT product_name,COUNT(DISTINCT ORDER_ID) AS TOT_ORDERS
+FROM  HF_CUST_SALES_ORDER_MASTER
+GROUP BY product_name
+ORDER BY TOT_ORDERS DESC
+LIMIT 3;
+
+-- MIN/MAXM
+SELECT CUSTOMER_ID,first_name,last_name,MIN(order_date) AS EARLIEST_ORDER_DATE,
+MAX(order_date) AS LATEST_ORDER_DATE
+FROM  HF_CUST_SALES_ORDER_MASTER
+GROUP BY 1,2,3
+ORDER BY 1,2,3;
+
+
+-- FOR EVERY CUSTOMER , TELL THE CHEAPEST PRODUCT AND THE COSTLIEST PRODUCT HE/SHE HAS BOUGHT
+SELECT DISTINCT CUSTOMER_ID,first_name,last_name,product_id,product_name,
+MIN(list_price) AS CHEAPEST_PRODUCT,
+MAX(list_price) AS EXPENSIVE_PRODUCT
+FROM  HF_CUST_SALES_ORDER_MASTER
+GROUP BY 1,2,3,4,5
+ORDER BY 1,2,3,4,5;
+
+-- TOTAL ORDERS PRODUCT WISE WHOSE ORDERS IS MORE THAN 200
+SELECT product_name,COUNT(DISTINCT ORDER_ID) AS TOT_ORDERS
+FROM  HF_CUST_SALES_ORDER_MASTER
+GROUP BY product_name
+HAVING TOT_ORDERS > 150
+ORDER BY TOT_ORDERS DESC;
+
+-- STORE WISE ORDERS 
+SELECT store_id,store_name,COUNT(DISTINCT ORDER_ID) AS TOT_ORDERS
+FROM  HF_CUST_SALES_ORDER_MASTER
+GROUP BY 1,2
+ORDER BY 3 DESC;
+
+-- TO FIND TOTAL PRICE FOR EVERY CUSTOMER
+CREATE TABLE HF_CUST_SALES_ORDER_MASTER_FINAL AS
+SELECT *, (quantity * list_price) AS TOT_PRICE
+FROM  HF_CUST_SALES_ORDER_MASTER;
+
+-- Add total price in the current table using alter table.
+ALTER TABLE HF_CUST_SALES_ORDER_MASTER
+ADD COLUMN TOT_PRICE DECIMAL (10, 2) NOT NULL;
+
+SELECT * FROM HF_CUST_SALES_ORDER_MASTER_FINAL;
+
+SET SQL_SAFE_UPDATES = 0;
+
+UPDATE HF_CUST_SALES_ORDER_MASTER
+SET TOT_PRICE = quantity * list_price
+WHERE TOT_PRICE = 0.00;
+
+SELECT DISTINCT TOT_PRICE FROM HF_CUST_SALES_ORDER_MASTER
+ORDER BY TOT_PRICE DESC;
+
+-- LETS DECIDE THE TOTAL_PRICVE BUCKET
+-- LOW_PRICE 0 -5000
+-- MEDIUM_PRICE 5000 - 15000
+-- HIGH_PRICE > 15000
+
+ALTER TABLE HF_CUST_SALES_ORDER_MASTER
+ADD COLUMN PRICE_BUCKET VARCHAR (20) NOT NULL;
+
+SELECT * FROM HF_CUST_SALES_ORDER_MASTER;
+
+UPDATE HF_CUST_SALES_ORDER_MASTER
+SET PRICE_BUCKET = 
+   CASE 
+       WHEN  TOT_PRICE <= 5000.00   THEN 'Low'
+       WHEN  TOT_PRICE > 5000.00 AND TOT_PRICE <= 15000.00 THEN 'Medium'
+       ELSE 'High' 
+   END 
+WHERE  PRICE_BUCKET = '';
+
+-- READING NULL VALUES
+SELECT * FROM HF_CUST_SALES_ORDER_MASTER WHERE PRICE_BUCKET IS NULL;
+
+-- READING COMPLETELY EMPTY/BLANK ROWS
+SELECT * FROM HF_CUST_SALES_ORDER_MASTER WHERE PRICE_BUCKET = '';
+
+CREATE TABLE HF_CUST_SALES_ORDER_MASTER_FINAL_BUCKET_RANGE
+SELECT * , 
+   CASE 
+       WHEN  TOT_PRICE <= 5000.00   THEN 'Low'
+       WHEN  TOT_PRICE > 5000.00 AND TOT_PRICE <= 15000.00 THEN 'Medium'
+	 -- TOT_PRICE BETWEEN 5000.00 and 15000
+       ELSE 'High' 
+   END AS PRICE_BUCKET
+FROM HF_CUST_SALES_ORDER_MASTER_FINAL;
+
+SELECT * FROM HF_CUST_SALES_ORDER_MASTER_FINAL_BUCKET_RANGE;
