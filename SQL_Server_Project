@@ -1,0 +1,208 @@
+
+Select * from product;
+
+select * from ProductCategory;
+
+Select * from Store;
+
+Select * from StoreSales;
+
+Select * from Territory;
+
+------1.Create a SQL query to join multiple tables: Store, Territory, Product, 
+-------ProductCategory, and StoreSales.
+
+Select * 
+FROM 
+    storesales 
+INNER JOIN 
+    product 
+ON 
+    storesales.productID = product.productID
+INNER JOIN 
+    ProductCategory
+ON
+    ProductCategory.productCategoryID = product.productCategoryID	
+INNER JOIN 
+    store 
+ON 
+    storesales.storeID = store.storeID
+INNER JOIN 
+    Territory 
+ON 
+    store.TerritoryID = Territory.TerritoryID;
+
+
+--2.Select specific columns: CountryCode, ProductCategory Name, and calculate the sum 
+---of StoreSales Amount and Quantity.
+
+Select Territory.Countrycode, Productcategory.Name As ProductCategory_Name,
+Floor(Sum(Storesales.amount)) As Total_Amount,Sum(Storesales.Quantity) as Total_Quantity
+FROM 
+    storesales 
+INNER JOIN 
+    product 
+ON 
+    storesales.productID = product.productID
+INNER JOIN 
+    ProductCategory
+ON
+    ProductCategory.productCategoryID = product.productCategoryID	
+INNER JOIN 
+    store 
+ON 
+    storesales.storeID = store.storeID
+INNER JOIN 
+    Territory 
+ON 
+    store.TerritoryID = Territory.TerritoryID
+Group by Territory.Countrycode, Productcategory.Name ;
+
+---3.Create a View based on the SQL query.
+
+Create view StoresalesView 
+As
+Select Territory.Countrycode, Productcategory.Name As ProductCategory_Name,
+Floor(Sum(Storesales.amount)) As Total_Amount,Sum(Storesales.Quantity) as Total_Quantity
+FROM 
+    storesales 
+INNER JOIN 
+    product 
+ON 
+    storesales.productID = product.productID
+INNER JOIN 
+    ProductCategory
+ON
+    ProductCategory.productCategoryID = product.productCategoryID	
+INNER JOIN 
+    store 
+ON 
+    storesales.storeID = store.storeID
+INNER JOIN 
+    Territory 
+ON 
+    store.TerritoryID = Territory.TerritoryID
+Group by Territory.Countrycode, Productcategory.Name;
+
+Select * from StoresalesView;
+
+---4.Create a Stored Procedure that calls the View.
+
+Create or Alter PROCEDURE USPGetView
+as
+begin
+    Select * from StoresalesView
+End
+
+Exec USPGetView
+
+----5.Allow the Stored Procedure to optionally take a CountryCode parameter. 
+--If no parameter is provided, all data should be returned
+
+Create or Alter PROCEDURE USPGetStoreAndTerritory
+      @Countrycode Varchar(2) = Null
+as
+begin
+      Select Territory.Countrycode, Productcategory.Name As ProductCategory_Name,
+Floor(Sum(Storesales.amount)) As Total_Amount,Sum(Storesales.Quantity) as Total_Quantity
+FROM 
+    storesales 
+INNER JOIN 
+    product 
+ON 
+    storesales.productID = product.productID
+INNER JOIN 
+    ProductCategory
+ON
+    ProductCategory.productCategoryID = product.productCategoryID	
+INNER JOIN 
+    store 
+ON 
+    storesales.storeID = store.storeID
+INNER JOIN 
+    Territory 
+ON 
+    store.TerritoryID = Territory.TerritoryID
+	where @countrycode is null or Territory.CountryCode = @Countrycode 
+    Group by Territory.Countrycode, Productcategory.Name
+	  
+end
+
+Exec USPGetStoreAndTerritory 'DE'
+
+------------5. Storeprocedure with view statement
+
+CREATE OR ALTER PROCEDURE USPGetStoreT
+    @Countrycode VARCHAR(2) = NULL
+AS
+BEGIN
+    IF (@Countrycode IS NULL)
+        Select * from StoresalesView
+		Order by Countrycode
+    
+    ELSE
+        Select * from StoresalesView
+		where Countrycode = @Countrycode
+		order by ProductCategory_Name
+            
+    
+END;
+
+EXEC USPGetStoreT 'FR' ;
+
+CREATE OR ALTER PROCEDURE USPGetStore
+    @Countrycode VARCHAR(2) = NULL
+AS
+BEGIN
+        Select * from StoresalesView
+END;
+
+EXEC USPGetStore 'CA';
+
+SELECT * FROM Storesales;
+-----------------------------------------------------------------------------------------------------
+
+SELECT *,
+DENSE_RANK() OVER(ORDER BY AMOUNT DESC) AS RANKING
+FROM STORESALES;
+
+Select SalesItemID, PRODUCT.Name, ProductCategory.Name, Amount, CountryCode, Region,
+ROW_NUMBER()OVER(PARTITION BY COUNTRYCODE ORDER BY AMOUNT DESC) AS RANKING
+FROM 
+    storesales 
+INNER JOIN 
+    product 
+ON 
+    storesales.productID = product.productID
+INNER JOIN 
+    ProductCategory
+ON
+    ProductCategory.productCategoryID = product.productCategoryID	
+INNER JOIN 
+    store 
+ON 
+    storesales.storeID = store.storeID
+INNER JOIN 
+    Territory 
+ON 
+    store.TerritoryID = Territory.TerritoryID;
+
+
+SELECT DISTINCT(UNITPRICE) FROM StoreSales
+ORDER BY UnitPrice DESC;
+
+SELECT * ,
+CASE
+      WHEN UnitPrice BETWEEN 0 AND 499 THEN 'LOW'
+      WHEN UnitPrice BETWEEN 500 AND 1201 THEN 'MEDIUM'
+	  ELSE 'HIGH'
+	  END AS UNITBUCKET
+FROM STORESALES;
+
+SELECT * ,
+CASE
+      WHEN UnitPrice < 499 THEN 'LOW'
+      WHEN UnitPrice < 1201 THEN 'MEDIUM'
+	  ELSE 'HIGH'
+	  END AS UNITBUCKET
+FROM STORESALES;
